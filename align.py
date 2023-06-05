@@ -106,7 +106,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-dir', type=str, required=True, help='set input image directory')
     parser.add_argument('--output-dir', type=str, help='set output image directory')
-    parser.add_argument('--size', type=int, default=256, help='set output size of cropped image')
+    parser.add_argument('--size', type=int, default=1024, help='set output size of cropped image')
     args = parser.parse_args()
 
     # Get input/output directories
