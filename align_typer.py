@@ -66,6 +66,7 @@ def image_align_68(
     lm_mouth_outer = lm[48:60]  # left-clockwise
     lm_mouth_inner = lm[60:68]  # left-clockwise
 
+
     # Calculate auxiliary vectors.
     eye_left = np.mean(lm_eye_left, axis=0)
     eye_right = np.mean(lm_eye_right, axis=0)
@@ -75,6 +76,9 @@ def image_align_68(
     mouth_right = lm_mouth_outer[6]
     mouth_avg = (mouth_left + mouth_right) * 0.5
     eye_to_mouth = mouth_avg - eye_avg
+    is_big=True
+    if abs(eye_to_eye[0]) < 64 or abs(eye_to_mouth[1]) < 64:
+        is_big=False
 
     # Choose oriented crop rectangle.
     x = eye_to_eye - np.flipud(eye_to_mouth) * [-1, 1]
@@ -189,7 +193,7 @@ def image_align_68(
 
     img_np = np.array(img)
 
-    return img_np, lm
+    return img_np, lm, is_big
 
 
 def read_image_opencv(image_path):
@@ -204,11 +208,8 @@ def func(filepaths, input_dir: Path, output_dir: Path, size: int, idx=0):
     )
     for img_file_ in tqdm(filepaths, desc=f"Process {idx}"):
         img_file = img_file_.as_posix()
-        img_name = img_file_.stem
-        if img_name.split("_")[-1] in ["bottom", "top"]:
-            continue
-        outpath = output_dir / img_file_.relative_to(input_dir)
-        if outpath.exists():
+        outpath_ = output_dir / img_file_.relative_to(input_dir)
+        if outpath_.exist():
             continue
         # Open input image
         img = read_image_opencv(img_file)
@@ -217,18 +218,20 @@ def func(filepaths, input_dir: Path, output_dir: Path, size: int, idx=0):
         preds = fa.get_landmarks_from_image(img)
         # Align and crop face
         if preds is not None and len(preds) > 0:
-            lm_68 = preds[0]
-            (img, lm) = image_align_68(
-                img,
-                np.asarray(lm_68),
-                output_size=size,
-            )
-            outpath.parent.mkdir(exist_ok=True, parents=True)
-            # Save output image
-            cv2.imwrite(
-                outpath.as_posix(),
-                cv2.cvtColor(img, cv2.COLOR_RGB2BGR),
-            )
+                (img, lm, is_big) = image_align_68(
+                    img,
+                    np.asarray(preds[0]),
+                    output_size=size,
+                )
+                if img is None:
+                    continue
+                outpath = outpath_.parent / f"{'big' if is_big else 'small'}" / f"{outpath_.stem}.png"
+                outpath.parent.mkdir(exist_ok=True, parents=True)
+                # Save output image
+                cv2.imwrite(
+                    outpath.as_posix(),
+                    cv2.cvtColor(img, cv2.COLOR_RGB2BGR),
+                )
         else:
             print("#. Warning: No landmarks found in {}".format(img_file))
             with open(
@@ -285,6 +288,7 @@ def main(
     for i, list_ in enumerate(chunked_lists):
         new_arg = (list_, input_dir, output_dir, size, i+index)
         new_process.append(new_arg)
+    # func(*new_process[0])
     with Pool(5) as pool:
         pool.starmap(func, new_process)
 
